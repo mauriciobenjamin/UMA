@@ -19,6 +19,8 @@
 #include <SPI.h>
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BME680.h"
+#include <K30_CO2.h>
+#include <hp_BH1750.h>
 
 #define BME_SCK 24
 #define BME_MISO 22
@@ -27,20 +29,36 @@
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 
+#define _PIN_CALIBRATE 40
+
+K30_CO2 k30(Wire, _PIN_CALIBRATE);
+hp_BH1750 BH1750;
+
 //Adafruit_BME680 bme; I2C
 Adafruit_BME680 bme(BME_CS); // hardware SPI
 //Adafruit_BME680 bme(BME_CS, BME_MOSI, BME_MISO,  BME_SCK);
+
 
 void setup() {
   Serial.begin(9600);
   while (!Serial);
   Serial.println(F("BME680 test"));
 
-  if (!bme.begin()) {
+  while (!bme.begin()) {
     Serial.println("Could not find a valid BME680 sensor, check wiring!");
-    while (1);
+    delay(1000);
   }
+  Serial.println("Sensor encontrado");
 
+  Wire.begin();
+
+  // Set up the encoder
+  k30.init();
+
+  // Set up de light sensor BH1750
+
+  bool avail = BH1750.begin(BH1750_TO_GROUND);
+  
   // Set up oversampling and filter initialization
   bme.setTemperatureOversampling(BME680_OS_8X);
   bme.setHumidityOversampling(BME680_OS_2X);
@@ -54,6 +72,20 @@ void loop() {
     Serial.println("Failed to perform reading :(");
     return;
   }
+  
+  k30.update();
+
+  BH1750.start();
+  float lux=BH1750.getLux();  
+
+  Serial.print("CO2: ");
+  Serial.print(k30.get_CO2());
+  Serial.println(" ppp");
+
+  Serial.print("Lux: ");
+  Serial.print(lux);
+  Serial.println(" lux");
+
   Serial.print("Temperature = ");
   Serial.print(bme.temperature);
   Serial.println(" *C");

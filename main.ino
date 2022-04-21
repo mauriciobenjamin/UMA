@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "Adafruit_PM25AQI.h"
 #include <hp_BH1750.h>
 
 hp_BH1750 BH1750;
