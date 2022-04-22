@@ -27,6 +27,7 @@ La UMA es un sistema desarrollado para el monitoreo ambiental, permitiendo el al
     - [ ] PMSA0031
     - [X] BME688
     - [ ] K30
+        - [ ] Recuperación del sensor cuando deja de registrar
     - [ ] LOX2
     - [ ] Adalogger
 - [ ] Comunicar con el modulo de BTL y monitorearlo en serial
