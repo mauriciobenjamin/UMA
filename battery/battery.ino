@@ -83,7 +83,7 @@ void setup() {
 
     /* Humedad relativa ***********************/
     Serial.println(F("Agregando la característica de humedad (UUID = 0x2A6F): "));
-    humMeasureCharId = gatt.addCharacteristic(0x2A6F, GATT_CHARS_PROPERTIES_INDICATE, 4, 4, BLE_DATATYPE_BYTEARRAY);
+    humMeasureCharId = gatt.addCharacteristic(0x2A6F, GATT_CHARS_PROPERTIES_NOTIFY, 4, 4, BLE_DATATYPE_BYTEARRAY);
     if (humMeasureCharId == 0)
     {
         error(F("No se pudo crear la característica de humedad"));
@@ -91,14 +91,14 @@ void setup() {
 
     /* Temperatura **************************/
     Serial.println(F("Agregando la característica de temperatura (UUID = 0x2A6E): "));
-    temMeasureCharId = gatt.addCharacteristic(0x2A6E, GATT_CHARS_PROPERTIES_INDICATE, 4, 4, BLE_DATATYPE_BYTEARRAY);
+    temMeasureCharId = gatt.addCharacteristic(0x2A6E, GATT_CHARS_PROPERTIES_NOTIFY, 4, 4, BLE_DATATYPE_BYTEARRAY);
     if (temMeasureCharId == 0) 
     {
         error(F("No se pudo agregar la característica de temperatura"));
     }
 
     Serial.println(F("Se agrega la UUID del servicio a la carga de anuncios: "));
-    uint8_t advdata[] { 0x02, 0x01, 0x06, 0x05, 0x02, 0x09, 0x18, 0x0a, 0x18};
+    uint8_t advdata[] { 0x02, 0x01, 0x06, 0x05, 0x02, 0x1a, 0x18, 0x0a, 0x18};
     ble.setAdvData(advdata, sizeof(advdata));
     
     /* Se tiene que reiniciar el dispositivo después de hacer cambios en los servicios para que estos tengan efecto*/
@@ -137,20 +137,20 @@ void loop(void) {
         Serial.print("Humedad: ");
         Serial.print(bme.humidity);
         Serial.println(" %");
-        check_hex(bme.humidity);
         floatBLE humBle;
         humBle.number = bme.humidity;
         // float2IEEE11073(bme.humidity, humBle+1);
+        // check_hex(bme.humidity);
         gatt.setChar(humMeasureCharId, humBle.bytes, 4);
         Serial.print("\n");
 
         Serial.print("Temperatura: ");
         Serial.print(bme.temperature);
         Serial.println(" °C");
-        check_hex(bme.temperature);
         floatBLE tempBle;
         tempBle.number = bme.temperature;
         // float2IEEE11073(bme.temperature, temp_ble+1);
+        // check_hex(bme.temperature);
         gatt.setChar(temMeasureCharId, tempBle.bytes, 4);
         Serial.print("\n");
     }   
