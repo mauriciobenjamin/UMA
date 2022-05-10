@@ -13,28 +13,20 @@ void setup()
   }
   Serial.println("Prueba de CO2");
   Wire.begin();
-  k30._debug = 1;
+  k30._debug = 0;
   k30.init();
 
-  for (uint8_t h = 0; h < 20; h++)
-  {
-    k30.pining();
-    Serial.print("\n");
-  }
+  // for (uint8_t h = 0; h < 20; h++)
+  // {
+  //   k30.pining();
+  //   Serial.print("\n");
+  // }
 }
 
 void loop()
 {
-  delay(1000);
-  Serial.println("Se apaga al regulador");
-  digitalWrite(REG, LOW);
-
-  delay(5000);
-  Serial.println("Se reinicia el regulador");
-  digitalWrite(REG, HIGH);
-  delay(2000);
-
   Serial.println("Intentando leer el sensor");
+  delay(3000);
   k30.update();
 
   char buf[50]; sprintf(buf, "CO2: %hu [ ppm ]\n", k30.get_CO2());

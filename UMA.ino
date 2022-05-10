@@ -20,57 +20,45 @@
 #include <Adafruit_Sensor.h>
 //Sensor de humedad relativa, temperatura, presión y COVs
 #include "Adafruit_BME680.h"
-//Reloj de tiempo real
-#include "RTClib.h"
 //Sensor de luz
 #include "hp_BH1750.h"
 //Sensor de PM2.5
 #include "Adafruit_PM25AQI.h"
+//Libreria de watchdog
+#include <Adafruit_SleepyDog.h>
 
 #define BME_CS A5
+#define AQI_SET 13
 
 Adafruit_BME680 bme(BME_CS);
-RTC_PCF8523 rtc;
 hp_BH1750 lux;
 Adafruit_PM25AQI aqi = Adafruit_PM25AQI();
 
 void setup () {
-  Serial.begin(57600);
+  Serial.begin(115200);
 
+  while (!Serial);
+  Serial.println("Unidad de monitoreo ambiental");
+
+  Serial.println("Probando modulo BME688");
   while(!bme.begin()) {
     Serial.println("No se encontró al sensor BME688");
     delay(1000);
   }
 
+  Serial.println("Probando modulo BH1750");
   bool avail = lux.begin(BH1750_TO_GROUND);
 
-  if (! rtc.begin()) {
-    Serial.println("No se pudo encontrar el Reloj de Tiempo Real");
-    Serial.flush();
-    while (1) delay(10);
-  }
-
-  if (! rtc.isrunning()) {
-    Serial.println("El RTC no estaba funcionando, se fijara el tiempo del sistema");
-    // When time needs to be set on a new device, or after a power loss, the
-    // following line sets the RTC to the date & time this sketch was compiled
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-    // This line sets the RTC with an explicit date & time, for example to set
-    // January 21, 2014 at 3am you would call:
-    // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
-  }
-
+  pinMode(AQI_SET, OUTPUT);
+  digitalWrite(AQI_SET, HIGH);
+  
+  delay(1000);
+  Serial.println("Probando modulo PM25");
   if (! aqi.begin_I2C())
   {
     Serial.println("No se encontró el sensor de PM 2.5");
+    delay(1000);
   }
-
-  // When time needs to be re-set on a previously configured device, the
-  // following line sets the RTC to the date & time this sketch was compiled
-  // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  // This line sets the RTC with an explicit date & time, for example to set
-  // January 21, 2014 at 3am you would call:
-  // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
 
   bme.setTemperatureOversampling(BME680_OS_8X); 
   bme.setHumidityOversampling(BME680_OS_2X);
@@ -81,8 +69,8 @@ void setup () {
 }
 
 void loop() {
-  DateTime time = rtc.now();
-  Serial.println(String("Marca de tiempo\t")+time.timestamp(DateTime::TIMESTAMP_FULL));
+  digitalWrite(AQI_SET, HIGH);
+  delay(1000*15);
 
   if (! bme.performReading())
   {
@@ -90,39 +78,50 @@ void loop() {
     return;
   }
 
+  PM25_AQI_Data data;
+  // Serial.print("{\"humedad\":");
+  Serial.print(bme.humidity);
+  Serial.print(",");
+
+  // Serial.print("\"temperatura\": ");
+  Serial.print(bme.temperature);
+  Serial.print(",");
+  
+  // Serial.print("\"presion\": ");
+  Serial.print(bme.pressure / 100.0);
+  Serial.print(",");
+
+  // Serial.print("\"vocs\": ");
+  Serial.print(bme.gas_resistance / 1000.0);
+
   if (lux.hasValue() == true) 
   {
     float luxValue = lux.getLux();
-    Serial.print("Luz: ");
+    Serial.print(",");
+    // Serial.print("\"luz\": ");
     Serial.print(luxValue);
-    Serial.println(" lumenes.");
     lux.start(); 
-  } else {
-    Serial.println("Fallo la lectura del sensor BH1750");
   }
 
-  PM25_AQI_Data data;
-  if(!aqi.read(&data)) {
-    Serial.println("No se pudo leer el sensor de calidad del aire");
-    delay(500);
+  if(aqi.read(&data)) {
+    Serial.print(",");
+    Serial.print(data.particles_100um);
+    Serial.print(",");
+    Serial.print(data.particles_50um);
+    Serial.print(",");
+    Serial.print(data.particles_25um);
+    Serial.print(",");
+    Serial.print(data.particles_10um);
+    Serial.print(",");
+    Serial.print(data.particles_05um);
+    Serial.print(",");
+    Serial.print(data.particles_03um);
   }
+  Serial.print("\n");
 
-  Serial.print("Humedad:\t");
-  Serial.print(bme.humidity);
-  Serial.println(" %");
-
-  Serial.print("Temperatura: ");
-  Serial.print(bme.temperature);
-  Serial.println(" °C");
-  
-  Serial.print("Presión: ");
-  Serial.print(bme.pressure / 100.0);
-  Serial.println(" hPa");
-  Serial.println("\n");
-
-  Serial.print("Particulas de > 2.5 um/0.1 L de aire:\t");
-  Serial.println(data.particles_25um);
-
-  //Delay 5s
-  delay(5000);
+  digitalWrite(AQI_SET, LOW);
+  int sleepMS = Watchdog.sleep(1000*15);
+  Serial.print("Durmio por ");
+  Serial.print(sleepMS, DEC);
+  //delay(1000*15); 
 }
