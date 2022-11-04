@@ -24,6 +24,8 @@
 #include "hp_BH1750.h"
 //Sensor de PM2.5
 #include "Adafruit_PM25AQI.h"
+//Libreria de CO2
+#include "K30_CO2.h"
 //Libreria de watchdog
 #include <Adafruit_SleepyDog.h>
 
@@ -33,6 +35,7 @@
 Adafruit_BME680 bme(BME_CS);
 hp_BH1750 lux;
 Adafruit_PM25AQI aqi = Adafruit_PM25AQI();
+K30_CO2 k30(Wire, 40);
 
 void setup () {
   Serial.begin(115200);
@@ -49,10 +52,12 @@ void setup () {
   Serial.println("Probando modulo BH1750");
   bool avail = lux.begin(BH1750_TO_GROUND);
 
+  k30.init();
+
   pinMode(AQI_SET, OUTPUT);
   digitalWrite(AQI_SET, HIGH);
-  
-  delay(1000);
+
+  delay(2000);
   Serial.println("Probando modulo PM25");
   if (! aqi.begin_I2C())
   {
@@ -117,11 +122,18 @@ void loop() {
     Serial.print(",");
     Serial.print(data.particles_03um);
   }
-  Serial.print("\n");
 
+  k30.update();
+  Serial.print(",");
+  Serial.print(k30.get_CO2());
+
+  Serial.print("\n");
   digitalWrite(AQI_SET, LOW);
-  int sleepMS = Watchdog.sleep(1000*15);
-  Serial.print("Durmio por ");
-  Serial.print(sleepMS, DEC);
-  //delay(1000*15); 
+  // Al dormir provoca errores en la lectura del serial de la RPi
+  // int sleepMS;
+  // for (u_int i = 0; i < 4; i++)
+  // {
+  //   sleepMS = Watchdog.sleep(1000*8);
+  // }
+  delay(1000*25); 
 }
