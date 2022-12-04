@@ -12,6 +12,7 @@
  * [ ] Habilitar el guardado de datos en la tarjeta SD
  * [ ] Habilitar sensor de CO2
  * [ ] Habilitar sensor de PM2.5
+ * [ ] Habilitar la comunicación por RS486
  ***************************************************************************/
 
 #include <Arduino.h>
