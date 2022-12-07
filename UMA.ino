@@ -38,30 +38,37 @@
 #include "Adafruit_PM25AQI.h"
 //Libreria de watchdog
 #include <Adafruit_SleepyDog.h>
+//Software serial para usar el sensor de oxigeno LOx
+#include <SoftwareSerial.h>
 
 #define BME_CS A5
 #define AQI_SET 13
+#define RXPIN 27
+#define TXPIN 30
 
 Adafruit_BME680 bme(BME_CS);
 hp_BH1750 lux;
 Adafruit_PM25AQI aqi = Adafruit_PM25AQI();
+SoftwareSerial o2Serial = SoftwareSerial(RXPIN, TXPIN);
 
 void setup () {
-  Serial.begin(115200);
-
-  while (!Serial);
+  Serial.begin(9600);
+  while (!Serial) { delay(10); }
   Serial.println("Unidad de monitoreo ambiental");
-//Sensor BME688 h/t/p/g
+  Serial.println("Serial funcionando");
+
+// configuración del Sensor BME688 h/t/p/g
   Serial.println("Probando modulo BME688");
   while(!bme.begin()) {
     Serial.println("No se encontró al sensor BME688");
     delay(1000);
   }
-//Sensor de luz
+
+//configuración Sensor de luz
   Serial.println("Probando modulo BH1750");
   bool avail = lux.begin(BH1750_TO_GROUND);
 
-//Sensor de partiiculas
+//configuración Sensor de partiiculas
   pinMode(AQI_SET, OUTPUT);
   digitalWrite(AQI_SET, HIGH);
 
@@ -72,6 +79,14 @@ void setup () {
     Serial.println("No se encontró el sensor de PM 2.5");
     delay(1000);
   }
+
+//Configuración del sensor de oxigeno
+  pinMode(RXPIN, INPUT);
+  pinMode(TXPIN, OUTPUT);
+  o2Serial.begin(9600);
+      //Verificar la documentación de los comandos válidos en https://cdn.shopify.com/s/files/1/0406/7681/files/Manual-Luminox-LOX-02-CO2-Sensor.pdf 
+  o2Serial.write("M 1\r\n");
+
 
   bme.setTemperatureOversampling(BME680_OS_8X); 
   bme.setHumidityOversampling(BME680_OS_2X);
@@ -92,32 +107,33 @@ void loop() {
   }
 
   PM25_AQI_Data data;
-  // Serial.print("{\"humedad\":");
+  Serial.print("{\"humedad\":");
   Serial.print(bme.humidity);
   Serial.print(",");
 
-  // Serial.print("\"temperatura\": ");
+  Serial.print("\"temperatura\": ");
   Serial.print(bme.temperature);
   Serial.print(",");
   
-  // Serial.print("\"presion\": ");
+  Serial.print("\"presion\": ");
   Serial.print(bme.pressure / 100.0);
   Serial.print(",");
 
-  // Serial.print("\"vocs\": ");
+  Serial.print("\"vocs\": ");
   Serial.print(bme.gas_resistance / 1000.0);
 
   if (lux.hasValue() == true) 
   {
     float luxValue = lux.getLux();
     Serial.print(",");
-    // Serial.print("\"luz\": ");
+    Serial.print("\"luz\": ");
     Serial.print(luxValue);
     lux.start(); 
   }
 
   if(aqi.read(&data)) {
     Serial.print(",");
+    Serial.print("\"particulas\": [");
     Serial.print(data.particles_100um);
     Serial.print(",");
     Serial.print(data.particles_50um);
@@ -129,11 +145,25 @@ void loop() {
     Serial.print(data.particles_05um);
     Serial.print(",");
     Serial.print(data.particles_03um);
+    Serial.print("]");
   }
 
   Serial.print(",");
+//Solicitud de datos del porcentaje de O2
+  o2Serial.write("%\r\n");
+  u_int response = o2Serial.available();
+  char value[10];
+  if(response) {
+    for(u_int i=0; response > i; i++) {
+        value[i] = o2Serial.read();
+      }
+  }
 
-  Serial.print("\n");
+  String oxigeno = value;
+
+  Serial.print("\"oxigeno\": ");
+  Serial.println(oxigeno.substring(3));
+
   digitalWrite(AQI_SET, LOW);
   // Al dormir provoca errores en la lectura del serial de la RPi
   // int sleepMS;
@@ -141,5 +171,5 @@ void loop() {
   // {
   //   sleepMS = Watchdog.sleep(1000*8);
   // }
-  delay(1000*2); 
+  delay(1000*5); 
 }
