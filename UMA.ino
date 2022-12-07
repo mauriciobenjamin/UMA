@@ -1,11 +1,15 @@
 /***************************************************************************
  * Sketch para controlar el envió de datos de los sensores por BLE
+
+ Sensores de la UMA
+  BH1750 sensor de luz
+  BME688 sensor de humedad/presion/temperatura/gas
+  LOx sensor de óxigeno
+
+  NOTAS
+  El sensor de CO2 queda pendiente de activación
  * 
  * TODO
- * [ ] Habilitar el modulo de BLE
- * [ ] Enviar los datos de un sensor por BLE
- * [ ] Enviar los datos de todos los sensores en modo de emisión
- * [ ] Enviar los datos de los sensores a demanda
  * [ ] Programar tiempos de medida
  * [ ] Habilitar modo de deep sleep
  * [ ] Habilitar configuración por el dispositivo central
@@ -13,6 +17,13 @@
  * [ ] Habilitar sensor de CO2
  * [ ] Habilitar sensor de PM2.5
  * [ ] Habilitar la comunicación por RS486
+ * [ ] Agregar el envió de datos por Modbus RS485
+
+ * TODO para BLE
+ * [ ] Habilitar el modulo de BLE
+ * [ ] Enviar los datos de un sensor por BLE
+ * [ ] Enviar los datos de todos los sensores en modo de emisión
+ * [ ] Enviar los datos de los sensores a demanda
  ***************************************************************************/
 
 #include <Arduino.h>
@@ -25,8 +36,6 @@
 #include "hp_BH1750.h"
 //Sensor de PM2.5
 #include "Adafruit_PM25AQI.h"
-//Libreria de CO2
-#include "K30_CO2.h"
 //Libreria de watchdog
 #include <Adafruit_SleepyDog.h>
 
@@ -36,25 +45,23 @@
 Adafruit_BME680 bme(BME_CS);
 hp_BH1750 lux;
 Adafruit_PM25AQI aqi = Adafruit_PM25AQI();
-K30_CO2 k30(Wire, 40);
 
 void setup () {
   Serial.begin(115200);
 
   while (!Serial);
   Serial.println("Unidad de monitoreo ambiental");
-
+//Sensor BME688 h/t/p/g
   Serial.println("Probando modulo BME688");
   while(!bme.begin()) {
     Serial.println("No se encontró al sensor BME688");
     delay(1000);
   }
-
+//Sensor de luz
   Serial.println("Probando modulo BH1750");
   bool avail = lux.begin(BH1750_TO_GROUND);
 
-  k30.init();
-
+//Sensor de partiiculas
   pinMode(AQI_SET, OUTPUT);
   digitalWrite(AQI_SET, HIGH);
 
@@ -124,9 +131,7 @@ void loop() {
     Serial.print(data.particles_03um);
   }
 
-  k30.update();
   Serial.print(",");
-  Serial.print(k30.get_CO2());
 
   Serial.print("\n");
   digitalWrite(AQI_SET, LOW);
@@ -136,5 +141,5 @@ void loop() {
   // {
   //   sleepMS = Watchdog.sleep(1000*8);
   // }
-  delay(1000*25); 
+  delay(1000*2); 
 }
