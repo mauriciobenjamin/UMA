@@ -10,7 +10,7 @@
   El sensor de CO2 queda pendiente de activación
  * 
  * TODO
- * [ ] Programar tiempos de medida
+ * [x] Programar tiempos de medida
  * [ ] Habilitar modo de deep sleep
  * [ ] Habilitar configuración por el dispositivo central
  * [ ] Habilitar el guardado de datos en la tarjeta SD
@@ -48,7 +48,7 @@
 #define AQI_SET 13
 #define RXPIN 27
 #define TXPIN 30
-#define cardSelect 4
+#define cardSelect 11
 
 Adafruit_BME680 bme(BME_CS);
 hp_BH1750 lux;
@@ -57,12 +57,41 @@ SoftwareSerial o2Serial = SoftwareSerial(RXPIN, TXPIN);
 RTC_PCF8523 rtc;
 File logfile;
 
-
+//Función para transformar números menores a 10 en cadenas de dos digitos
+// con cero al principio
 String twoDigits(u_int value) {
   if(value > 9) {
     return String(value, DEC);
   }
   return String("0"+String(value, DEC));
+}
+
+// Función para transformar un tipo DateTime a String en formato ISO
+String timeToString(DateTime time) {
+  String year = String(twoDigits(time.year()));
+  String month = String(twoDigits(time.month()));
+  String day = String(twoDigits(time.day()));
+  String hour = String(twoDigits(time.hour()));
+  String minute = String(twoDigits(time.minute()));
+  String second = String(twoDigits(time.second()));
+  String result = String(year+"-"+month+"-"+day+" "+hour+":"+ minute+":"+second); 
+  return result;
+}
+
+// Función para el manejo de errores
+void error(uint8_t errno) {
+  while(1) {
+    uint8_t i;
+    for (i=0; i < errno; i++) {
+      digitalWrite(13, HIGH);
+      delay(100);
+      digitalWrite(13, LOW);
+      delay(100);
+    }
+    for (i = errno; i < 10; i++) {
+      delay(200);
+    }
+  }
 }
 
 void setup () {
@@ -100,7 +129,17 @@ void setup () {
   o2Serial.begin(9600);
       //Verificar la documentación de los comandos válidos en https://cdn.shopify.com/s/files/1/0406/7681/files/Manual-Luminox-LOX-02-CO2-Sensor.pdf 
   o2Serial.write("M 1\r\n");
-
+  o2Serial.write("%\r\n");
+  u_int response = o2Serial.available();
+  char value[10];
+  if(response) {
+    for(u_int i=0; response > i; i++) {
+        value[i] = o2Serial.read();
+      }
+  }
+  String oxigeno = value;
+  Serial.print("Sensor de oxigeno preparado ");
+  Serial.println(oxigeno.substring(3, 8));
 
   bme.setTemperatureOversampling(BME680_OS_8X); 
   bme.setHumidityOversampling(BME680_OS_2X);
@@ -142,31 +181,45 @@ void setup () {
   // rtc.calibrate(PCF8523_TwoHours, 0); // Un-comment to cancel previous calibration
 
   Serial.print("Offset is "); Serial.println(offset); // Print to control offset
+
+  // Configuración de la tarjeta SD para hacer el registro local de datos
+  if(!SD.begin(cardSelect)) {
+    Serial.println("Tarjeta SD fallo");
+    error(2);
+  }
+  char filename[15];
+  strcpy(filename, "/LOGGER00.TXT");
+  for (uint8_t i = 0; i < 100; i++) {
+    filename[7] = '0' + i/10;
+    filename[8] = '0' + i%10;
+    if(!SD.exists(filename)) {
+      break;
+    }
+  }
+  logfile = SD.open(filename, FILE_WRITE);
+  if(!logfile) {
+    Serial.print("No se pudo crear el archivo ");
+    Serial.print(filename);
+    error(3);
+  }
+  Serial.print("Escribiendo en ");
+  Serial.println(filename);
+  Serial.println("Listo.");
+  Serial.print("Registro iniciado el ");
+  Serial.println(timeToString(rtc.now()));
+  logfile.print("Registro de datos ambientales iniciado el ");
+  logfile.println(timeToString(rtc.now()));
+  logfile.println("tiempo, humedad, temperatura, presion, vocs, luz, particulas, oxigeno");
+  logfile.flush();
 }
 
 void loop() {
 
   digitalWrite(AQI_SET, HIGH);
-  DateTime now = rtc.now();
-  u_int year = now.year();
-  u_int month = now.month();
-  u_int day = now.day();
-  u_int hour = now.hour();
-  u_int minute = now.minute();
-  u_int second = now.second();
 
+  String timeNow = timeToString(rtc.now());
   Serial.print("{\"tiempo\": \"");
-  Serial.print(year);
-  Serial.print("-");
-  Serial.print(twoDigits(month));
-  Serial.print("-");
-  Serial.print(twoDigits(day));
-  Serial.print(" ");
-  Serial.print(twoDigits(hour));
-  Serial.print(":");
-  Serial.print(twoDigits(minute));
-  Serial.print(":");
-  Serial.print(twoDigits(second));
+  Serial.print(timeNow);
   Serial.print("\", ");
 
   if (! bme.performReading())
@@ -176,46 +229,62 @@ void loop() {
   }
 
   PM25_AQI_Data data;
+  float humidity = bme.humidity;
+  float temperature = bme.temperature;
+  float pressure = bme.pressure/100.0;
+  float gas = bme.gas_resistance / 1000.0;
+
   Serial.print("\"humedad\":");
-  Serial.print(bme.humidity);
+  Serial.print(humidity);
   Serial.print(",");
 
   Serial.print("\"temperatura\": ");
-  Serial.print(bme.temperature);
+  Serial.print(temperature);
   Serial.print(", ");
   
   Serial.print("\"presion\": ");
-  Serial.print(bme.pressure / 100.0);
+  Serial.print(pressure);
   Serial.print(", ");
 
   Serial.print("\"vocs\": ");
-  Serial.print(bme.gas_resistance / 1000.0);
+  Serial.print(gas);
 
+  float luxValue;
   if (lux.hasValue() == true) 
   {
-    float luxValue = lux.getLux();
+    luxValue = lux.getLux();
     Serial.print(", ");
     Serial.print("\"luz\": ");
     Serial.print(luxValue);
     lux.start(); 
   }
 
+  int pm100, pm50, pm25, pm10, pm05, pm03;
+
   if(aqi.read(&data)) {
+    pm100 = data.particles_100um;
+    pm50 = data.particles_50um;
+    pm25 = data.particles_25um;
+    pm10 = data.particles_10um;
+    pm05 = data.particles_05um;
+    pm03 = data.particles_03um;
     Serial.print(", ");
     Serial.print("\"particulas\": [");
-    Serial.print(data.particles_100um);
+    Serial.print(pm100);
     Serial.print(",");
-    Serial.print(data.particles_50um);
+    Serial.print(pm50);
     Serial.print(",");
-    Serial.print(data.particles_25um);
+    Serial.print(pm25);
     Serial.print(",");
-    Serial.print(data.particles_10um);
+    Serial.print(pm10);
     Serial.print(",");
-    Serial.print(data.particles_05um);
+    Serial.print(pm05);
     Serial.print(",");
-    Serial.print(data.particles_03um);
+    Serial.print(pm03);
     Serial.print("]");
   }
+
+  int particles[6] = {pm100, pm50, pm25, pm10, pm05, pm03};
 
   Serial.print(", ");
 //Solicitud de datos del porcentaje de O2
@@ -229,18 +298,29 @@ void loop() {
   }
 
   String oxigeno = value;
+  oxigeno = oxigeno.substring(3, 8);
 
   Serial.print("\"oxigeno\": ");
-  Serial.print(oxigeno.substring(3, 7));
+  Serial.print(oxigeno);
   Serial.print("}\n");
 
-
   digitalWrite(AQI_SET, LOW);
-  // Al dormir provoca errores en la lectura del serial de la RPi
-  // int sleepMS;
-  // for (u_int i = 0; i < 4; i++)
-  // {
-  //   sleepMS = Watchdog.sleep(1000*8);
-  // }
-  delay(1000*5); 
+
+  char buffer[80];
+
+  sprintf(buffer, "%s, %f, %f, %f, %f, %f, %d, %d, %d, %d, %d, %d, %s", timeNow, humidity, temperature, pressure, gas, luxValue, particles[0], particles[1], particles[2], particles[3], particles[4], particles[5], oxigeno);
+
+  Serial.println(buffer);
+  logfile.println(buffer);
+  logfile.flush();
+  
+  /*El watchdog no maneja tiempos tan largos de sueño por eso
+  se tiene que dividir en varios segmentos*/
+  int sleepMS;
+  for (u_int i = 0; i < 6; i++) {
+    sleepMS = Watchdog.sleep(1000*10);
+    #if defined(USBCON) && !defined(USE_TINYUSB)
+      USBDevice.attach();
+    #endif
+  }
 }
