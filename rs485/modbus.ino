@@ -23,7 +23,13 @@ rxPin A6
 drPin A5
 RS485.setPines(int txPin, int drPin, int rxPin);
 */
+
 const int numHoldingRegisters = 12;
+const int txPin = 15;
+const int drPin = 7;
+const int rxPin = 11;
+
+RS485.setPines(txPin, drPin, rxPin);
 
 void setup() {
   Serial.begin(9600);
